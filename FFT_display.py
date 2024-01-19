@@ -30,7 +30,7 @@ def organ(frequency, amplitude, x):
 SAMPLE_RATE = 44100
 
 # choose a wave function
-WAVE = piano
+WAVE = sin_wave
 
 # plot one period of the wave
 frequency = 440
