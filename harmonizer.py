@@ -1,9 +1,7 @@
-import matplotlib.pyplot as plt
 import sounddevice as sd
 import numpy as np
-from scipy.fftpack import fft, ifft
+from scipy.fftpack import fft
 import pygame.midi as midi
-from matplotlib import pyplot as plt
 
 midi.init()
 device = midi.get_default_input_id()
@@ -21,18 +19,6 @@ active_notes = {}
 
 def sine(t, freq):
     return np.float32(np.sin(2 * np.pi * freq * t))
-
-
-def saw(t, freq):
-    return np.float32(2 * np.mod(freq * t, 1) - 1)
-
-
-def square(t, freq):
-    return np.float32(np.sign(np.sin(2 * np.pi * freq * t)))
-
-
-def triangle(t, freq):
-    return np.float32(np.abs(saw(t, freq)) - 0.5)
 
 
 def midi_to_frequency(note):
@@ -63,8 +49,8 @@ def harmonic(note, magnitude, index, volume):
     max_amp = magnitude[index]
     result = np.zeros(frames)
 
-    harmonics_count = int(5 * np.average(magnitude) / len(active_notes))
-    print(harmonics_count)
+    # harmonics_count = int(5 * np.average(magnitude) / len(active_notes))
+    harmonics_count = 10
 
     for i in range(1, harmonics_count + 1):
 
@@ -107,8 +93,6 @@ def harmonic(note, magnitude, index, volume):
     return result
 
 
-prev_mags = np.zeros(int(frames * stretch)//2)
-prev_volume = 0
 prev_wave = np.zeros(frames)
 
 def callback(indata, outdata, frames, time, status):
@@ -121,11 +105,14 @@ def callback(indata, outdata, frames, time, status):
 
     FFT = fft(original, int(frames * stretch))
     magnitude = np.abs(FFT[:len(FFT) // 2])
+    index = np.argmax(magnitude)
+    maximum = np.max(magnitude)
+    global prev_wave
 
-    if np.average(magnitude) < 0.1:
+    if maximum - np.average(magnitude) < 200:
         wave = np.zeros(frames)
+        prev_wave = wave
     else:
-        index = np.argmax(magnitude)
 
         if midi_in.poll():
             midi_data = midi_in.read(1)[0]
@@ -137,7 +124,6 @@ def callback(indata, outdata, frames, time, status):
                     active_notes.pop(note)
             else:
                 active_notes[note] = (1 - note / 108)
-                active_notes[note] *= velocity / 127
 
         result = np.zeros(frames)
 
@@ -149,15 +135,15 @@ def callback(indata, outdata, frames, time, status):
 
         wave = result[:frames] * volume
 
-    # smooth out the wave by taking the average of the previous wave and the current wave
-    global prev_wave
+        # smooth out the wave by taking the average of the previous wave and the current wave
+        wave = (wave + prev_wave) / 2
+        prev_wave = wave
 
-    wave = (wave + prev_wave) / 2
-    prev_wave = wave
+        wave *= 0.3
 
     # add original wave to the output
 
-    wave += original * 0.1
+    wave += original * 0.05
 
     outdata[:] = wave.reshape((len(wave), 1))
 
